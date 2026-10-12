@@ -30,7 +30,7 @@ import {
   requirementAnalysisSystemPrompt,
 } from "./prompts.js";
 
-const inputSchema = z.object({
+export const recommendationInputSchema = z.object({
   requirement: z.string().trim().min(8).max(4000),
   profileId: z.enum(["india-first", "ai-gpu"]).default("india-first"),
 });
@@ -122,7 +122,7 @@ const State = Annotation.Root({
   report: Annotation<RecommendationReport | undefined>({ reducer: (_, next) => next, default: () => undefined }),
 });
 
-export type RecommendationInput = z.input<typeof inputSchema>;
+export type RecommendationInput = z.input<typeof recommendationInputSchema>;
 
 export class RecommendationAgent {
   private readonly graph;
@@ -156,7 +156,7 @@ export class RecommendationAgent {
   }
 
   async recommend(input: unknown): Promise<RecommendationReport> {
-    const parsed = inputSchema.parse(input);
+    const parsed = recommendationInputSchema.parse(input);
     const result = await this.graph.invoke({
       requirement: parsed.requirement,
       profileId: parsed.profileId,

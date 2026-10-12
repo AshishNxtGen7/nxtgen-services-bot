@@ -13,6 +13,8 @@
   "scripts": {
     "dev:frontend": "npm run dev --workspace frontend",
     "dev:backend": "npm run dev --workspace backend",
-    "build": "npm run build --workspace backend && npm run build --workspace frontend"
+    "build": "npm run build --workspace backend && npm run build --workspace frontend",
+    "test": "npm run build && node --test backend/tests/*.test.mjs frontend/tests/*.test.mjs",
+    "prepare": "node scripts/install-git-hooks.mjs"
   }
 }
