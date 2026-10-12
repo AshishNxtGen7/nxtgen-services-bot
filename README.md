@@ -26,6 +26,10 @@ npm run dev:backend
 npm run dev:frontend
 ```
 
+## Tests and commit gate
+
+Run `npm test` to build/type-check both workspaces and run the backend and frontend test suites. The tracked Git pre-commit hook runs the same command and blocks a commit if any build or test fails. `npm install` and `npm ci` register the hook for the checkout. GitHub Actions also runs `npm test` for pull requests targeting `main` and pushes to `main`.
+
 The frontend runs at `http://localhost:5173`; the API listens at `http://localhost:3001`. Set `TAVILY_API_KEY` and `OPENAI_API_KEY` in `backend/.env` to enable the full workflow. `OPENAI_CHAT_MODEL` defaults to `gpt-4.1-mini`; `OPENAI_EMBEDDING_MODEL` defaults to `text-embedding-3-small`.
 
 Each generated PDF is saved in `frontend/public/reports/` and can be opened or downloaded from the report view. Generated PDFs are ignored by Git because reports can contain client requirements. Set `REPORTS_DIR` to change the output folder.
