@@ -3,6 +3,7 @@ frontend/dist/
 frontend/public/reports/*.pdf
 backend/dist/
 backend/data/
+monitoring/data/
 backend/.env
 .env
 .DS_Store

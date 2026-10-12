@@ -45,8 +45,62 @@ The frontend does not request company profiles or catalog PDFs. Provider materia
 Other endpoints:
 
 - `GET /api/health` — API status.
+- `GET /metrics` — Prometheus exposition endpoint with request totals by method, route, and status code, request duration histograms, and in-flight request counts. The scrape endpoint excludes its own traffic.
 - `GET /api/knowledge/status` — indexed document counts and model readiness.
 - `POST /api/knowledge/documents` — ingest a PDF with provider attribution (`speedcloud`, `aws`, `azure`, or `gcp`).
+
+### Start Prometheus on macOS
+
+The [Prometheus query UI](http://localhost:9090/graph?g0.expr=nxtgen_api_http_requests_total&g0.tab=1) is available after Prometheus starts. Install it with Homebrew (Apple Silicon is supported by the official formula):
+
+If `brew` is also unavailable, install Homebrew using its [official macOS instructions](https://docs.brew.sh/Installation), then reopen the terminal.
+
+```sh
+brew install prometheus
+```
+
+Keep the API bound to localhost (`HOST=127.0.0.1` in `backend/.env`, which is also the default). Start the backend, then run Prometheus from another terminal at the repository root:
+
+```sh
+prometheus --config.file=monitoring/prometheus.yml --storage.tsdb.path=monitoring/data --web.listen-address=127.0.0.1:9090
+```
+
+If Prometheus is already listening on port 9090, use that instance instead of starting a duplicate. Open the [Prometheus query UI](http://localhost:9090/graph?g0.expr=nxtgen_api_http_requests_total&g0.tab=1) and check **Status → Targets**; `nxtgen-api` should show as **UP**. If you want to run this project config alongside an existing instance, change the listen address in the command to `127.0.0.1:9091` and use port 9091 in the UI link. It can take up to 15 seconds for the first scrape. Stop a foreground instance with Ctrl-C.
+
+Docker is an optional alternative. Set `HOST=0.0.0.0` in `backend/.env` so its container can reach the API, restart the backend, then run `docker compose -f compose.prometheus.yml up -d`. The API is unauthenticated, so use this setting only on a trusted local network and restore `HOST=127.0.0.1` afterward. Stop the container with `docker compose -f compose.prometheus.yml down`.
+
+Useful PromQL queries for dashboards:
+
+```promql
+# Requests per second, grouped by API route and method
+sum by (route, method) (rate(nxtgen_api_http_requests_total[5m]))
+
+# 5xx response rate, grouped by route
+sum by (route) (rate(nxtgen_api_http_requests_total{status_code=~"5.."}[5m]))
+
+# 95th percentile request duration, grouped by route
+histogram_quantile(0.95, sum by (le, route) (rate(nxtgen_api_http_request_duration_seconds_bucket[5m])))
+```
+
+Failed API requests (HTTP 4xx and 5xx) are written as structured backend error logs with the route, method, status, duration, and sanitized request and response bodies. Common credential fields such as passwords, tokens, API keys, authorization, and cookies are redacted; body logs are limited to 8,000 characters. View these in the backend process output or your configured log collector.
+
+### Send server errors to OpenClaw
+
+The backend can notify a local OpenClaw Gateway when it returns a 5xx response. Notifications are limited to one per method, route, and status every five minutes. They include method, route, status, duration, time, and the failed request and response bodies after the same credential redaction and 8,000-character per-body limit used in the backend logs. These bodies can contain customer requirements and are sent to OpenAI through your configured API key. The Gateway must be running on the same computer; this does not forward errors from a deployed API server to your laptop.
+
+1. Install OpenClaw using the [official instructions](https://docs.openclaw.ai/install/installer), then run `openclaw onboard` and set up your model provider. Keep the Gateway bound to loopback.
+2. Enable authenticated inbound hooks for the intended agent using the [OpenClaw webhook guide](https://docs.openclaw.ai/automation/cron-jobs/webhooks). Webhooks are disabled by default; allow only the agent you intend to receive these reports.
+3. Set these values in `backend/.env` (keep the token private and do not commit it):
+
+   ```dotenv
+   OPENCLAW_ERROR_HOOK_URL=http://127.0.0.1:18789/hooks/agent
+   OPENCLAW_ERROR_HOOK_TOKEN=<same-long-random-hook-token-configured-in-openclaw>
+   OPENCLAW_ERROR_AGENT_ID=nxtgen-error-reviewer
+   ```
+
+The local Gateway dashboard is at [http://127.0.0.1:18789/](http://127.0.0.1:18789/). The `nxtgen-error-reviewer` agent uses a separate clean worktree and can run only the guarded `nxtgen-pr` helper: it syncs from `origin/main`, builds the project, and opens a PR on a `fix/openclaw-*` branch. It cannot merge or push to `main`. The helper requires GitHub CLI authentication; from a new terminal, run `gh auth login --hostname github.com --git-protocol https --web` and complete GitHub’s sign-in flow. The GitHub Actions build workflow runs on PRs and pushes to `main`. Prometheus metrics remain useful for request rates and trends; this notification path is for local server-side errors while the Mac and Gateway are running.
+
+OpenAI API usage by the error agent can incur usage charges. It receives the sanitized request and response content described above so it can use the failed requirement as diagnostic context.
 
 Uploaded chunks are stored under ignored `backend/data/` for local development. Only upload material you are authorized to process. Uploaded catalog facts should be reviewed before being used for a procurement decision.
 

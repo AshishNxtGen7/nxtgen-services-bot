@@ -6,11 +6,16 @@ import { RecommendationAgent, validateProviderId } from "./agent/recommendation-
 import { KnowledgeStore } from "./knowledge/store.js";
 import { sourceRegistry } from "./knowledge/sources.js";
 import { CatalogStore } from "./catalog/catalog-store.js";
+import { registerFailedRequestLogging } from "./observability/failed-request-logging.js";
+import { registerPrometheusMetrics } from "./observability/prometheus-metrics.js";
 
 const server = Fastify({ logger: true, bodyLimit: 1024 * 1024 });
 const knowledgeStore = new KnowledgeStore();
 const catalogStore = new CatalogStore();
 const agent = new RecommendationAgent(knowledgeStore, catalogStore);
+
+registerPrometheusMetrics(server);
+registerFailedRequestLogging(server);
 
 await server.register(cors, {
   origin: process.env.FRONTEND_ORIGIN ?? "http://localhost:5173",
@@ -84,7 +89,7 @@ server.setErrorHandler((error, request, reply) => {
 });
 
 const port = Number(process.env.PORT ?? 3001);
-await server.listen({ port, host: "127.0.0.1" });
+await server.listen({ port, host: process.env.HOST ?? "127.0.0.1" });
 
 function isHttpError(error: unknown): error is Error & { statusCode: number } {
   return error instanceof Error && "statusCode" in error && typeof error.statusCode === "number";
